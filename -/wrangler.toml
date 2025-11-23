@@ -1,0 +1,22 @@
+name = "agent-worker"
+main = "src/index.js"
+compatibility_date = "2024-11-22"
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "agent-db"
+database_id = "TO_BE_FILLED_BY_USER" # User needs to run 'npx wrangler d1 create agent-db' and paste ID here
+
+# Cron Triggers (Every 2 hours)
+[triggers]
+crons = ["0 */2 * * *"]
+
+# Environment Variables
+[vars]
+GEMINI_MODEL = "gemini-2.0-flash-lite-preview-02-05"
+TELEGRAM_API_URL = "https://api.telegram.org/bot"
+
+# Observability
+[observability]
+enabled = true
