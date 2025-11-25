@@ -1,93 +1,67 @@
 # Implementation Plan - Cloudflare Worker AI Agent
 
-This plan outlines the steps to build the Telegram monitoring bot using Cloudflare Workers, D1, and Gemini 2.0 Flash Lite.
+This plan outlines the steps to build a robust, scalable Telegram monitoring bot using Cloudflare Workers, D1, and Gemini 2.0 Flash Lite.
 
 ## User Review Required
 > [!IMPORTANT]
-> **Model Selection**: Strictly `gemini-2.0-flash-lite-preview-02-05`.
-> **Smart Comparison**: We will implement text segmentation to save tokens.
-> **Telemetry**: We will add tables for tracking usage and errors.
+> **Hybrid Architecture**: We will use `fetch` by default and `Browser Rendering` only for dynamic sites (`is_dynamic` flag).
+> **Event-Centric**: Focus on storing and notifying about *events*, not just page changes.
+> **Modularity**: Code will be split into `services/`, `lib/`, and `router/` to prevent monolithic `index.js`.
 
 ## Proposed Changes
 
-### Project Structure
-#### [NEW] [wrangler.toml](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/wrangler.toml)
--   Configuration for Worker, D1 binding (`DB`), and Cron triggers.
+### 1. Database Schema & Storage
+#### [NEW] [schema.sql](file:///d:/AI/aleksandro%20kursas/cloudflare-agent/schema.sql)
+-   **`urls`**: Added `is_dynamic` (BOOLEAN) to toggle Browser Rendering.
+-   **`events`**: New table for deduplication (`id`, `url_id`, `title`, `date_iso`, `price_info`, `hash`, `first_seen_at`).
+-   **`telemetry`**: Enhanced metrics (`urls_checked`, `changes_found`, `llm_calls`, `errors_count`, `duration_ms`).
+-   **`errors`**: Structured error logging (`level`: warning/critical, `type`: fetch/llm/parse).
 
-#### [NEW] [schema.sql](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/schema.sql)
--   SQL definitions for `urls`, `filters`, `changes_log`.
--   **[NEW]** `telemetry` table (id, timestamp, urls_checked, changes_found, llm_calls, notifications_sent).
--   **[NEW]** `errors` table (id, url_id, error_message, timestamp).
+### 2. Hybrid Scraping & Smart Rendering
+-   **Default**: Use lightweight `fetch()` + HTML cleaning (Cheerio/Regex).
+-   **Dynamic**: Use Cloudflare Browser Rendering only if `is_dynamic=true` in DB.
+-   **Fallback**: If `fetch()` returns < 500 chars, auto-retry with Browser (and suggest flagging as dynamic).
 
-#### [NEW] [src/index.js](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/src/index.js)
--   Main worker logic.
--   `fetch` handler for Telegram updates.
--   `scheduled` handler for Cron jobs with **Throttling** and **Telemetry**.
+### 3. Two-Level Analysis Pipeline
+To save tokens and costs:
+-   **Level 1 (Fast Diff & Noise Filter)**:
+    -   **Segmentation**: Compare text segments (Paragraphs/List items).
+    -   **Levenshtein Check**: Calculate Levenshtein Distance between old and new content.
+        -   If `Distance < Threshold` AND `No New Structured Events` -> Ignore (Treat as typo fix/formatting change).
+    -   **Noise Filter**: Ignore changes < 10 chars, reordered blocks.
+    -   If changes are minor -> Skip or use "Lite" LLM check.
+-   **Level 2 (Deep Analysis)**:
+    -   Triggered if: Significant content change OR New Event detected OR User requested `/test`.
+    -   Sends full content to Gemini with `PROMPT_DEEP_ANALYSIS`.
+    -   Extracts Events, Prices, Dates.
 
-#### [NEW] [src/lib/cleaner.js](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/src/lib/cleaner.js)
--   HTML cleaning logic.
--   **[NEW]** `segmentText(text)` function to split content into comparable blocks.
+### 4. Modular Code Architecture
+Refactor `src/index.js` into:
+-   `src/router.js`: Handle Telegram Webhooks & Commands.
+-   `src/services/scraper.js`: Hybrid fetching logic.
+-   `src/services/analyzer.js`: Segmentation, Diffing, and LLM orchestration.
+-   `src/services/database.js`: D1 interactions (Events, URLs).
+-   `src/lib/prompts.js`: Centralized Prompt Engineering.
 
-#### [NEW] [src/lib/differ.js](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/src/lib/differ.js)
--   **[NEW]** Logic to compare block hashes and identify changed segments.
+### 5. AI Intent & Natural Language
+-   **Router**: Regex for instant commands (`/add`, `/list`) -> Zero latency.
+-   **NLP Fallback**: If regex fails, use `PROMPT_INTENT_RECOGNITION` to parse:
+    -   "Monitor sauna.fi" -> `ADD_URL`
+    -   "Show me stats" -> `GET_TELEMETRY`
+    -   "Any new events?" -> `CHECK_EVENTS`
 
-#### [NEW] [src/lib/gemini.js](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/src/lib/gemini.js)
--   Gemini API client (REST).
+### 6. Telemetry & Maintenance
+-   **Daily Cleanup**: Cron job to delete logs > 30 days.
+-   **Daily Report**: Summary of errors and stats sent to Admin.
+-   **Error Normalization**: Classify errors (Network vs Parse vs LLM) for better debugging.
 
-#### [NEW] [src/lib/prompts.js](file:///c:/Users/HP/.gemini/antigravity/playground/outer-spicule/src/lib/prompts.js)
--   **[NEW]** Centralized storage for prompts.
-
-### Verification Plan
+## Verification Plan
 
 ### Automated Tests
--   `test/segmentation.test.js`: Verify text splitting logic.
--   `test/simulation.js`: Mock run of the cron job.
+-   `test/diff.test.js`: Verify segmentation and noise filtering.
+-   `test/intent.test.js`: Test NLP command parsing.
 
 ### Manual Verification
-1.  **Deploy**: `npx wrangler deploy`.
-2.  **Database**: `npx wrangler d1 execute ...`
-3.  **Telegram**:
-    -   Check Throttling limits.
-    -   Send Telegram messages (Individual or Bulk). **MUST include Source URL.**
-    -   Update `urls` (hashes) and `telemetry` (stats).
-
-### Natural Language Upgrade
-#### [MODIFY] [src/index.js](file:///d:/AI/aleksandro%20kursas/cloudflare-agent/src/index.js)
--   Integrate `handleNaturalLanguage` flow.
--   Use Gemini to parse intent (ADD, LIST, REMOVE, QUERY).
-
-#### [MODIFY] [src/lib/prompts.js](file:///d:/AI/aleksandro%20kursas/cloudflare-agent/src/lib/prompts.js)
--   Add `PROMPT_INTENT_RECOGNITION`.
-
-## [NEW] Advanced Scraping & Analysis Upgrade (Paid Plan)
-
-### Architecture Changes
-1.  **Browser Rendering (Puppeteer)**:
-    -   Replace simple `fetch` with Cloudflare Browser Rendering.
-    -   Allows handling JS-heavy sites, lazy loading, and better text extraction.
-    -   Requires `Browser` binding in `wrangler.toml`.
-
-2.  **Advanced LLM Analysis**:
-    -   Move from "segment classification" to "full page analysis".
-    -   Feed larger context to Gemini to understand the "vibe" and extract high-quality offers.
-    -   Output "digested" summaries (Title, Context, Price, Date, Why it matters).
-
-### Implementation Steps
-
-#### 1. Configuration
--   **[MODIFY]** `wrangler.toml`: Add `browser` binding.
--   **[INSTALL]** `@cloudflare/puppeteer`.
-
-#### 2. Browser Service
--   **[NEW]** `src/lib/browser.js`:
-    -   `launchBrowser(env)`: Manage browser instance.
-    -   `scrapePage(url, env)`: Render page, scroll to bottom, extract visible text.
-
-#### 3. Enhanced Analysis
--   **[MODIFY]** `src/index.js`:
-    -   Update `fetchPage` to use `browser.scrapePage`.
-    -   Update `analyzeSegments` to `analyzePageContent`.
-    -   Use a new `PROMPT_DEEP_ANALYSIS` to extract structured, digested results.
-
-#### 4. Refactoring
--   **[CLEANUP]** `src/index.js`: Restore clean state and integrate new modules.
+1.  **Hybrid Test**: Add a static site (Wikipedia) and a dynamic site (SPA). Verify correct scraper usage.
+2.  **Event Dedup**: Run check twice on same site. Ensure 2nd run produces NO notifications.
+3.  **Load Test**: Add 10 URLs, run `/test`. Verify throttling and rate limits.

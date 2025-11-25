@@ -11,7 +11,7 @@ database_id = "e6946a3b-d7bc-4ec6-88be-d116c30746f4"
 
 # Cron Triggers (Every 2 hours)
 [triggers]
-crons = ["0 */2 * * *"]
+crons = ["0 */6 * * *"]
 
 # Environment Variables
 [vars]
