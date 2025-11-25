@@ -1,0 +1,29 @@
+{
+  "name": "sauna-scope-bot",
+  "version": "2.0.0",
+  "description": "SaunaScopeBot - Cloudflare Worker for monitoring sauna and wellness events",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:create": "wrangler d1 create agent-db",
+    "db:migrate": "wrangler d1 execute agent-db --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute agent-db --local --file=./schema.sql",
+    "db:studio": "wrangler d1 studio agent-db",
+    "secret:gemini": "wrangler secret put GEMINI_API_KEY",
+    "secret:telegram-token": "wrangler secret put TELEGRAM_BOT_TOKEN",
+    "secret:telegram-chat": "wrangler secret put TELEGRAM_CHAT_ID"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
+    "cheerio": "^1.1.2"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  },
+  "keywords": ["cloudflare-workers", "sauna", "wellness", "events", "monitoring", "telegram-bot"],
+  "author": "",
+  "license": "MIT"
+}

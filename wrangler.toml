@@ -9,11 +9,11 @@ binding = "DB"
 database_name = "agent-db"
 database_id = "e6946a3b-d7bc-4ec6-88be-d116c30746f4"
 
-# Cron Triggers (Every 2 hours)
+# Cron Triggers (Every 6 hours)
 [triggers]
 crons = ["0 */6 * * *"]
 
-# Environment Variables
+# Environment Variables (non-sensitive)
 [vars]
 GEMINI_MODEL = "gemini-2.0-flash-lite-preview-02-05"
 TELEGRAM_API_URL = "https://api.telegram.org/bot"
@@ -26,3 +26,10 @@ enabled = true
 [browser]
 binding = "MYBROWSER"
 
+# =============================================================================
+# SECRETS (set via wrangler secret put)
+# =============================================================================
+# Run these commands to set secrets:
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put TELEGRAM_CHAT_ID
